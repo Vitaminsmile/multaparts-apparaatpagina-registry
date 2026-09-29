@@ -2,14 +2,46 @@
 namespace Multaparts\ApparaatpaginaRegistry\Infrastructure\Registry;
 
 final class Wpdb_Registry_Reader implements Registry_Reader {
+	const EXPECTED_SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'psa_compatibility_registry_schema_version';
+	const REQUIRED_COLUMNS = array(
+		'models'   => array( 'id', 'model_key', 'brand', 'commercial_type' ),
+		'variants' => array( 'id', 'device_model_id', 'machinecode' ),
+		'links'    => array( 'product_id', 'device_model_id', 'device_variant_id' ),
+	);
+
 	private $db;
 	private $tables;
+	private $readiness;
 	public function __construct( $db, Registry_Table_Names $tables ) { $this->db = $db; $this->tables = $tables; }
 	public function is_ready() {
-		foreach ( array( $this->tables->models, $this->tables->variants, $this->tables->links ) as $table ) {
-			if ( $this->db->get_var( $this->db->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) { return false; }
+		if ( null !== $this->readiness ) {
+			return $this->readiness;
 		}
-		return true;
+
+		$version = get_option( self::SCHEMA_VERSION_OPTION, false );
+		if ( false !== $version && '' !== $version && ! $this->is_compatible_version( (string) $version ) ) {
+			return $this->readiness = false;
+		}
+
+		foreach ( self::REQUIRED_COLUMNS as $table_property => $required_columns ) {
+			$table = $this->tables->{$table_property};
+			$like  = method_exists( $this->db, 'esc_like' ) ? $this->db->esc_like( $table ) : addcslashes( $table, '_%\\' );
+			if ( $this->db->get_var( $this->db->prepare( 'SHOW TABLES LIKE %s', $like ) ) !== $table ) {
+				return $this->readiness = false;
+			}
+
+			$rows    = (array) $this->db->get_results( 'SHOW COLUMNS FROM `' . str_replace( '`', '``', $table ) . '`', ARRAY_A );
+			$columns = array_column( $rows, 'Field' );
+			if ( array_diff( $required_columns, $columns ) ) {
+				return $this->readiness = false;
+			}
+		}
+
+		return $this->readiness = true;
+	}
+	private function is_compatible_version( $version ) {
+		return 0 === strpos( $version, '1.' ) && version_compare( $version, self::EXPECTED_SCHEMA_VERSION, '>=' );
 	}
 	public function find_model( $model_key ) {
 		$sql = $this->db->prepare( "SELECT id, model_key, brand, commercial_type FROM {$this->tables->models} WHERE model_key = %s LIMIT 1", $model_key );
