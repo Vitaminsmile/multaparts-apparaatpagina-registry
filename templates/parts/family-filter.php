@@ -1,0 +1,3 @@
+<?php $total=$view->total_count; ?>
+<?php $base=$view->preview?add_query_arg('mapr_preview','1',$view->canonical):$view->canonical; ?>
+<aside class="mapr-filter"><details open><summary>Soort onderdeel</summary><nav aria-label="Filter op soort onderdeel"><a class="<?php echo $view->selected_family?'':'is-active'; ?>" href="<?php echo esc_url($base); ?>">Alle onderdelen <span>(<?php echo esc_html($total); ?>)</span></a><?php foreach($view->families as $slug=>$family): ?><a class="<?php echo $view->selected_family===$slug?'is-active':''; ?>" href="<?php echo esc_url(add_query_arg('soort-onderdeel',$slug,$base)); ?>"><?php echo esc_html($family['label']); ?> <span>(<?php echo esc_html($family['count']); ?>)</span></a><?php endforeach; ?></nav></details></aside>
