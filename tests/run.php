@@ -86,6 +86,11 @@ check(is_file($root.'/templates/device-page.php')&&is_file($root.'/assets/css/de
 $card=source('templates/parts/product-card.php');
 check(strpos($card,'Controleer je product-/servicenummer')!==false,'variant warning remains visible in product card');
 check(strpos($card,'Bekijk product')!==false&&strpos($card,'mapr-cart')!==false,'product card contains detail and cart actions');
+check(strpos($card,'🛒')===false,'product card contains no Unicode cart emoji');
+check(strpos($card,'<svg class="mapr-cart__icon"')!==false&&strpos($card,'aria-hidden="true"')!==false,'cart action contains a deterministic hidden SVG icon');
+$assurances=source('templates/parts/assurance-row.php');
+foreach(['shield-check','delivery-truck','calendar','advice'] as $icon_type)check(strpos($assurances,"'$icon_type'")!==false,"assurance row defines differentiated $icon_type icon");
+check(!preg_match('/(?:font.?awesome|<script|<link|https?:\/\/)/i',$card.$assurances),'icons introduce no external dependency');
 $hero=source('templates/parts/hero.php');
 check(strpos($hero,'mapr-hero')===false&&strpos($hero,'mapr-page-header')!==false,'large blue hero structure is replaced by category-style header');
 $device_template=source('templates/device-page.php');
