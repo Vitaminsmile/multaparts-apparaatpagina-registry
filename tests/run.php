@@ -42,10 +42,18 @@ check($scope->warning_required(Scope::SUBSET_OF_VARIANTS),'subset requires warni
 check($scope->warning_required(Scope::INCONSISTENT),'inconsistent data fails conservatively');
 
 $attribute=new class{function is_taxonomy(){return false;}function get_name(){return 'Soort onderdeel';}function get_options(){return ['V-snaar'];}};
-$product=new class($attribute){private $a;function __construct($a){$this->a=$a;}function get_attributes(){return [$this->a];}};
+$product=new class($attribute){private $a;function __construct($a){$this->a=$a;}function get_attributes(){return [$this->a];}function get_attribute($name){return '';}};
 check((new Family())->get($product)==='V-snaar','local Soort onderdeel is extracted through CRUD object');
 $empty=new class{function get_attributes(){return [];}};
 check((new Family())->get($empty)===null,'missing family remains empty');
+$taxonomy_attribute=new class{function is_taxonomy(){return true;}function get_name(){return 'pa_soort-onderdeel';}function get_options(){return [12];}};
+$taxonomy_product=new class($taxonomy_attribute){private $a;function __construct($a){$this->a=$a;}function get_attributes(){return [$this->a];}function get_attribute($name){return 'V-snaar';}function get_name(){return 'A title that must not be inspected';}};
+check((new Family())->get($taxonomy_product)==='V-snaar','global WooCommerce Soort onderdeel taxonomy is extracted through product API');
+$family_summary=(new Family())->summarize(['V-snaar','v-SNAAR','V-snaar',null]);
+check(count($family_summary)===1&&$family_summary['v-snaar']['count']===3,'independent products with case-equivalent family labels share one count');
+check(array_sum(array_column($family_summary,'count'))===3,'missing family remains outside family counts');
+$title_only=new class{function get_attributes(){return [];}function get_name(){return 'V-snaar voor wasmachine';}};
+check((new Family())->get($title_only)===null,'product title is never used to infer family');
 
 $reader=source('src/Infrastructure/Registry/Wpdb_Registry_Reader.php');
 check(strpos($reader,'WHERE model_key = %s')!==false,'model lookup is exact and prepared');
@@ -68,12 +76,27 @@ check(strpos($service,"array( 'publish' )")!==false,'public path requests publis
 check(strpos($service,"'status' => 404")!==false,'missing/invisible content fails 404');
 check(strpos($service,"'status' => 503")!==false,'unavailable registry fails 503');
 check(strpos($service,"soort-onderdeel")!==false,'family filter runs after bounded hydration');
+check(strpos($service,'count( $vm->products )')!==false&&strpos($service,'array_filter($vm->products')!==false,'filtered result count is based on displayed product cards');
 $assets=source('src/Integration/Assets.php');
 check(strpos($assets,'controller->view()')!==false,'assets require a valid built view');
 check(strpos($all,'Categoriepagina')===false&&strpos($all,'Filter_Data_Service')===false,'no category plugin runtime dependency');
 check(strpos($all,'set_transient')===false&&strpos($all,'get_transient')===false,'no persistent application cache');
 check(strpos(source('src/Routing/Canonical_Key_Route_Resolver.php'),"'|'" )!==false,'model key convention is encapsulated in resolver');
 check(is_file($root.'/templates/device-page.php')&&is_file($root.'/assets/css/device-page.css'),'standalone view and scoped stylesheet exist');
+$card=source('templates/parts/product-card.php');
+check(strpos($card,'Controleer je product-/servicenummer')!==false,'variant warning remains visible in product card');
+check(strpos($card,'Bekijk product')!==false&&strpos($card,'mapr-cart')!==false,'product card contains detail and cart actions');
+check(strpos($card,'🛒')===false,'product card contains no Unicode cart emoji');
+check(strpos($card,'<svg class="mapr-cart__icon"')!==false&&strpos($card,'aria-hidden="true"')!==false,'cart action contains a deterministic hidden SVG icon');
+$assurances=source('templates/parts/assurance-row.php');
+foreach(['shield-check','delivery-truck','calendar','advice'] as $icon_type)check(strpos($assurances,"'$icon_type'")!==false,"assurance row defines differentiated $icon_type icon");
+check(!preg_match('/(?:font.?awesome|<script|<link|https?:\/\/)/i',$card.$assurances),'icons introduce no external dependency');
+$hero=source('templates/parts/hero.php');
+check(strpos($hero,'mapr-hero')===false&&strpos($hero,'mapr-page-header')!==false,'large blue hero structure is replaced by category-style header');
+$device_template=source('templates/device-page.php');
+check(preg_match('/breadcrumb.*hero.*assurance-row.*mapr-layout.*support-content/s',$device_template),'category-style page structure is present');
+$css=source('assets/css/device-page.css');
+check(strpos($css,'.mapr-device-page')===0&&strpos($css,'mapr-page-header')!==false,'device stylesheet remains route-scoped and styles normal page header');
 
 $schema=array(
 	'wp_psa_device_models'=>['id','model_key','brand','commercial_type'],

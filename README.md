@@ -1,6 +1,6 @@
 # Multaparts Apparaatpagina Registry
 
-Standalone, read-only WordPress/WooCommerce frontend for the canonical device registry. Version **0.1.0** renders device pages at `/onderdelen/{brand}/{type}/` without a WordPress page, taxonomy archive, importer, or another Multaparts frontend plugin.
+Standalone, read-only WordPress/WooCommerce frontend for the canonical device registry. Version **0.1.1** renders device pages at `/onderdelen/{brand}/{type}/` without a WordPress page, taxonomy archive, importer, or another Multaparts frontend plugin.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ The plugin never creates, repairs, migrates, indexes, or writes to those tables.
 - Authorized administrators can explicitly request `?mapr_preview=1`. Private products additionally require `read_post`; preview responses are private/no-store and noindex/nofollow.
 - `?soort-onderdeel={slug}` filters the already bounded registry result; `?sorteer=price-asc|price-desc|name` sorts it.
 - Canonicals always point to the clean model URL.
-- Product families are read through the WooCommerce product-attribute API from the local attribute named `Soort onderdeel`.
+- Product families are read through the WooCommerce product-attribute API from the local or global attribute named `Soort onderdeel` (`pa_soort-onderdeel`). Labels that differ only in case normalize to one family; products without that explicit attribute remain in “Alle onderdelen” only.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ Install the release ZIP in WordPress and activate it. Activation and deactivatio
 
 ## Extension hooks
 
-- `mapr_assurance_items`: centrally replace the three short assurance labels.
+- `mapr_assurance_items`: centrally replace the four short assurance labels.
 - `mapr_support_article_links`: provide at most two arrays containing `label` and `url`.
 
 ## Development

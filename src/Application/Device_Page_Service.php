@@ -20,21 +20,23 @@ final class Device_Page_Service {
 		$known = array_column( $known_rows, 'id' ); $vm = new Device_Page_View_Model();
 		$vm->model = $model; $vm->canonical = $this->resolver->canonical_url( $model );
 		$vm->preview = (bool) array_filter( $links, static function ( $link ) { return 'private' === $link['post_status']; } );
+		$family_values = array();
 		foreach ( $links as $link ) {
 			if ( ! isset( $hydrated[ $link['product_id'] ] ) ) { continue; }
 			$family = $this->families->get( $hydrated[ $link['product_id'] ] );
 			$scope = $this->variants->classify( $link['model_only'], $link['variant_ids'], $known );
 			$vm->products[] = Product_Card_View_Model::from_product( $hydrated[ $link['product_id'] ], $family, $scope, $this->variants->warning_required( $scope ) );
-			if ( $family ) { $slug=sanitize_title($family); $vm->families[$slug]=array('label'=>$family,'count'=>($vm->families[$slug]['count']??0)+1); }
+			$family_values[] = $family;
 		}
 		if ( ! $vm->products ) { return array( 'status' => 404 ); }
+		$vm->families = $this->families->summarize( $family_values );
 		$vm->total_count = count( $vm->products );
 		$filter = isset($_GET['soort-onderdeel']) ? sanitize_title(wp_unslash($_GET['soort-onderdeel'])) : '';
 		$vm->selected_family = isset($vm->families[$filter]) ? $filter : '';
 		if ($vm->selected_family) { $vm->products=array_values(array_filter($vm->products,static function($p)use($filter){return $p->family_slug===$filter;})); }
 		$vm->sort = isset($_GET['sorteer']) ? sanitize_key(wp_unslash($_GET['sorteer'])) : 'default';
 		$this->sort($vm->products,$vm->sort);
-		$vm->assurances = apply_filters( 'mapr_assurance_items', array( 'Veilig betalen', 'Snelle levering', 'Deskundig advies' ) );
+		$vm->assurances = apply_filters( 'mapr_assurance_items', array( 'Kwaliteitsproducten', 'Snel geleverd', '14 dagen op zicht', 'Deskundig persoonlijk advies' ) );
 		$vm->article_links = apply_filters( 'mapr_support_article_links', array() );
 		return array( 'status' => 200, 'view' => $vm );
 	}
