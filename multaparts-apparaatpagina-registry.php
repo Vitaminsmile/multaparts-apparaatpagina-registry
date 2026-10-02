@@ -2,14 +2,14 @@
 /**
  * Plugin Name: Multaparts Apparaatpagina Registry
  * Description: Read-only apparaatpagina's op basis van het centrale apparatenregister.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires PHP: 7.4
  * Text Domain: multaparts-apparaatpagina-registry
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MAPR_VERSION', '0.1.1' );
+define( 'MAPR_VERSION', '0.1.2' );
 define( 'MAPR_FILE', __FILE__ );
 define( 'MAPR_PATH', plugin_dir_path( __FILE__ ) );
 define( 'MAPR_URL', plugin_dir_url( __FILE__ ) );

@@ -97,6 +97,17 @@ $device_template=source('templates/device-page.php');
 check(preg_match('/breadcrumb.*hero.*assurance-row.*mapr-layout.*support-content/s',$device_template),'category-style page structure is present');
 $css=source('assets/css/device-page.css');
 check(strpos($css,'.mapr-device-page')===0&&strpos($css,'mapr-page-header')!==false,'device stylesheet remains route-scoped and styles normal page header');
+check(strpos($css,'.mapr-device-page{')===0&&!preg_match('/(?:^|})\s*(?:html|body|\*|\.mapr-wrap)(?:[,{])/',$css),'device stylesheet has no global selector leakage');
+check(strpos($css,'.mapr-device-page{--blue:#273582;--aqua:#00a6be;--green:#53b20f;background:#fff;')===0,'device page canvas is white');
+check(strpos($css,'background:#f6f7f9')===false&&strpos($css,'background:#f7f8fb')===false,'broad grey page canvas is absent');
+check(strpos($css,'.mapr-device-page .mapr-card{')!==false&&strpos($css,'border:1px solid #e0e3e9;border-radius:0 6px 6px 6px')!==false,'product cards have a subtle border, square top-left, and three rounded corners');
+check(strpos($css,'.mapr-device-page .mapr-filter details{')!==false&&strpos($css,'border:1px solid #e2e4e9;border-radius:0 6px 6px 6px')!==false,'family card has a subtle border, square top-left, and three rounded corners');
+check(strpos($css,'.mapr-device-page .mapr-results{min-width:0}')!==false&&strpos($css,'.mapr-device-page .mapr-toolbar form{display:flex;min-width:0;')!==false,'results and sort form may shrink inside the desktop grid without overflow');
+$toolbar=source('templates/parts/toolbar.php');
+check(strpos($toolbar,'for="mapr-sort">Sorteren</label>')!==false&&strpos($toolbar,'<select id="mapr-sort"')!==false,'sort label and select remain present');
+check(strpos($css,'.mapr-device-page .mapr-toolbar label{position:absolute')===false,'sort label is not visually clipped at mobile widths');
+check(strpos($service,'$vm->families = $this->families->summarize( $family_values );')!==false,'family count source remains unchanged');
+check(strpos($assurances,'data-mapr-icon')!==false&&strpos($card,'<path d="M3 4h2l2.2 10.2')!==false,'assurance and cart SVG markup remain in place');
 
 $schema=array(
 	'wp_psa_device_models'=>['id','model_key','brand','commercial_type'],
