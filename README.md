@@ -1,6 +1,6 @@
 # Multaparts Apparaatpagina Registry
 
-Standalone, read-only WordPress/WooCommerce frontend for the canonical device registry. Version **0.1.1** renders device pages at `/onderdelen/{brand}/{type}/` without a WordPress page, taxonomy archive, importer, or another Multaparts frontend plugin.
+Standalone, read-only WordPress/WooCommerce frontend for the canonical device registry. Version **0.1.2** renders device pages at `/onderdelen/{brand}/{type}/` without a WordPress page, taxonomy archive, importer, or another Multaparts frontend plugin.
 
 ## Requirements
 
