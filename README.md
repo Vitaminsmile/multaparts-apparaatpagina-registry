@@ -15,6 +15,7 @@ The plugin never creates, repairs, migrates, indexes, or writes to those tables.
 - Authorized administrators can explicitly request `?mapr_preview=1`. Private products additionally require `read_post`; preview responses are private/no-store and noindex/nofollow.
 - `?soort-onderdeel={slug}` filters the already bounded registry result; `?sorteer=price-asc|price-desc|name` sorts it.
 - Canonicals always point to the clean model URL.
+- Visible device names use the registry model's `display_model` when present and fall back exactly to `commercial_type`; routing and canonical URLs continue to use the canonical model key.
 - Product families are read through the WooCommerce product-attribute API from the local or global attribute named `Soort onderdeel` (`pa_soort-onderdeel`). Labels that differ only in case normalize to one family; products without that explicit attribute remain in “Alle onderdelen” only.
 
 ## Architecture
