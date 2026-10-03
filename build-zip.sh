@@ -2,7 +2,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
 name="multaparts-apparaatpagina-registry"
-out="$root/dist/${name}-0.1.3.zip"
+out="$root/dist/${name}-0.1.4.zip"
 mkdir -p "$root/dist"
 rm -f "$out"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
