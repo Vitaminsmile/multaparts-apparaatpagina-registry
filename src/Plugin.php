@@ -11,6 +11,7 @@ use Multaparts\ApparaatpaginaRegistry\Infrastructure\Registry\Wpdb_Registry_Read
 use Multaparts\ApparaatpaginaRegistry\Infrastructure\WooCommerce\Woo_Product_Repository;
 use Multaparts\ApparaatpaginaRegistry\Integration\Assets;
 use Multaparts\ApparaatpaginaRegistry\Integration\Public_Device_Page_Url;
+use Multaparts\ApparaatpaginaRegistry\Integration\Public_Device_Product_Ids;
 use Multaparts\ApparaatpaginaRegistry\Integration\Seo_Hooks;
 use Multaparts\ApparaatpaginaRegistry\Routing\Canonical_Key_Route_Resolver;
 use Multaparts\ApparaatpaginaRegistry\Routing\Device_Query;
@@ -19,12 +20,14 @@ use Multaparts\ApparaatpaginaRegistry\View\Template_Renderer;
 
 final class Plugin {
 	private static $public_device_page_url;
+	private static $public_device_product_ids;
 
 	public static function boot() {
 		global $wpdb;
 		$reader = new Wpdb_Registry_Reader( $wpdb, new Registry_Table_Names( $wpdb->prefix ) );
 		$resolver = new Canonical_Key_Route_Resolver( $reader );
 		self::$public_device_page_url = new Public_Device_Page_Url( $reader, $resolver );
+		self::$public_device_product_ids = new Public_Device_Product_Ids( $reader, $resolver );
 		$service = new Device_Page_Service( $resolver, $reader, new Woo_Product_Repository(), new Product_Family_Service(), new Variant_Scope_Service() );
 		$controller = new Device_Page_Controller( new Device_Query(), $service, new Preview_Policy(), new Template_Renderer() );
 
@@ -40,5 +43,13 @@ final class Plugin {
 		}
 
 		return self::$public_device_page_url->get( $brand, $commercial_type );
+	}
+
+	public static function device_public_product_ids( $brand, $commercial_type ) {
+		if ( ! self::$public_device_product_ids ) {
+			return array();
+		}
+
+		return self::$public_device_product_ids->get( $brand, $commercial_type );
 	}
 }
