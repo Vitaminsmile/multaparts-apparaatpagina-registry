@@ -54,10 +54,15 @@ check($scope->warning_required(Scope::INCONSISTENT),'inconsistent data fails con
 
 $url_reader=new class implements Registry_Reader{
 	public $ready=true;
+	public $links=[['product_id'=>101,'post_status'=>'publish']];
+	public $product_link_calls=[];
 	public function is_ready(){return $this->ready;}
 	public function find_model($model_key){return null;}
 	public function known_variants($model_id){return [];}
-	public function product_links($model_id,array $statuses){return [];}
+	public function product_links($model_id,array $statuses){
+		$this->product_link_calls[]=[$model_id,$statuses];
+		return array_values(array_filter($this->links,static function($link)use($statuses){return in_array($link['post_status'],$statuses,true);}));
+	}
 };
 $url_resolver=new class implements Model_Route_Resolver{
 	public $resolved=[];public $canonical_models=[];public $model=['id'=>7,'model_key'=>'zanker|at5000'];
@@ -68,6 +73,13 @@ $url_helper=new Public_Device_Page_Url($url_reader,$url_resolver);
 check($url_helper->get('Zanker','AT5000')==='https://example.test/onderdelen/zanker|at5000/','mixed-case helper input returns the resolver canonical URL');
 check($url_resolver->resolved[0]===['zanker','at5000'],'helper passes normalized route slugs to resolver');
 check($url_resolver->canonical_models[0]===$url_resolver->model,'helper obtains canonical URL from the resolved model through resolver');
+check($url_reader->product_link_calls[0]===[7,['publish']],'public helper checks published links through the registry reader API');
+$url_reader->links=[['product_id'=>102,'post_status'=>'private']];$canonical_count=count($url_resolver->canonical_models);
+check($url_helper->get('Zanker','AT5000')===null,'existing canonical model with private-only links must NOT be exposed by mapr_get_device_page_url()');
+check(count($url_resolver->canonical_models)===$canonical_count,'private-only model does not reach canonical URL generation');
+$url_reader->links=[];
+check($url_helper->get('Zanker','AT5000')===null,'canonical model without product links returns null');
+$url_reader->links=[['product_id'=>101,'post_status'=>'publish']];
 $url_resolver->model=null;
 check($url_helper->get('Unknown','Model')===null,'unknown model returns null');
 $url_resolver->model=['id'=>7];
@@ -87,6 +99,7 @@ check((new Device_Query())->segments()===null,'existing route uses the shared ov
 $public_sources=source('src/Integration/Public_Device_Page_Url.php').source('src/Integration/functions.php');
 check(strpos($public_sources,'display_model')===false&&strpos($public_sources,'type_number')===false&&strpos($public_sources,'machinecode')===false&&strpos($public_sources,'post_title')===false,'public helper introduces no fuzzy alias, title, or machinecode matching');
 check(!preg_match('/\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|dbDelta|flush_rewrite_rules|update_option|add_option)\b/i',$public_sources),'public helper contains no registry or WordPress write operations');
+check(strpos($public_sources,"product_links( (int) \$model['id'], array( 'publish' ) )")!==false,'public helper reuses published product-link registry reads');
 check(strpos(source('src/Plugin.php'),'new Public_Device_Page_Url( $reader, $resolver )')!==false,'plugin bootstrap gives public helper the canonical route resolver');
 
 $attribute=new class{function is_taxonomy(){return false;}function get_name(){return 'Soort onderdeel';}function get_options(){return ['V-snaar'];}};
@@ -121,6 +134,7 @@ $seo=source('src/Integration/Seo_Hooks.php');
 check(strpos($seo,"'noindex'")!==false&&strpos($seo,'canonical')!==false,'preview robots and canonical are implemented');
 $service=source('src/Application/Device_Page_Service.php');
 check(strpos($service,"array( 'publish' )")!==false,'public path requests publish only');
+check(strpos($service,"array( 'publish', 'private' )")!==false&&strpos($service,'$preview->may_read_private')!==false,'authorized preview behavior continues to include capability-filtered private links');
 check(strpos($service,"'status' => 404")!==false,'missing/invisible content fails 404');
 check(strpos($service,"'status' => 503")!==false,'unavailable registry fails 503');
 check(strpos($service,"soort-onderdeel")!==false,'family filter runs after bounded hydration');

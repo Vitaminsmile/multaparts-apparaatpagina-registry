@@ -25,6 +25,11 @@ final class Public_Device_Page_Url {
 			return null;
 		}
 
+		$links = $this->reader->product_links( (int) $model['id'], array( 'publish' ) );
+		if ( ! $links ) {
+			return null;
+		}
+
 		$url = $this->resolver->canonical_url( $model );
 		return is_string( $url ) && '' !== $url ? $url : null;
 	}

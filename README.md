@@ -1,6 +1,6 @@
 # Multaparts Apparaatpagina Registry
 
-Standalone, read-only WordPress/WooCommerce frontend for the canonical device registry. Version **0.1.3** renders device pages at `/onderdelen/{brand}/{type}/` without a WordPress page, taxonomy archive, importer, or another Multaparts frontend plugin.
+Standalone, read-only WordPress/WooCommerce frontend for the canonical device registry. Version **0.1.4** renders device pages at `/onderdelen/{brand}/{type}/` without a WordPress page, taxonomy archive, importer, or another Multaparts frontend plugin.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ Install the release ZIP in WordPress and activate it. Activation and deactivatio
 
 ## Extension hooks
 
-Other plugins can perform an exact, read-only canonical model lookup with `mapr_get_device_page_url( $brand, $commercial_type )`. It returns the canonical device-page URL, or `null` when the input, registry, or model is unavailable.
+Other plugins can perform an exact, read-only public device-page lookup with `mapr_get_device_page_url( $brand, $commercial_type )`. It returns the canonical device-page URL only when the registry is available, the canonical model exists, and the model has at least one published product link. It returns `null` otherwise, including for models with only private links; this helper is deliberately not preview-aware.
 
 - `mapr_assurance_items`: centrally replace the four short assurance labels.
 - `mapr_support_article_links`: provide at most two arrays containing `label` and `url`.
