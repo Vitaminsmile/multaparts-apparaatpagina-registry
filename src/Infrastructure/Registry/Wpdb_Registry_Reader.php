@@ -13,6 +13,7 @@ final class Wpdb_Registry_Reader implements Registry_Reader {
 	private $db;
 	private $tables;
 	private $readiness;
+	private $model_columns = array();
 	public function __construct( $db, Registry_Table_Names $tables ) { $this->db = $db; $this->tables = $tables; }
 	public function is_ready() {
 		if ( null !== $this->readiness ) {
@@ -33,6 +34,9 @@ final class Wpdb_Registry_Reader implements Registry_Reader {
 
 			$rows    = (array) $this->db->get_results( 'SHOW COLUMNS FROM `' . str_replace( '`', '``', $table ) . '`', ARRAY_A );
 			$columns = array_column( $rows, 'Field' );
+			if ( 'models' === $table_property ) {
+				$this->model_columns = $columns;
+			}
 			if ( array_diff( $required_columns, $columns ) ) {
 				return $this->readiness = false;
 			}
@@ -44,7 +48,9 @@ final class Wpdb_Registry_Reader implements Registry_Reader {
 		return 0 === strpos( $version, '1.' ) && version_compare( $version, self::EXPECTED_SCHEMA_VERSION, '>=' );
 	}
 	public function find_model( $model_key ) {
-		$sql = $this->db->prepare( "SELECT id, model_key, brand, commercial_type FROM {$this->tables->models} WHERE model_key = %s LIMIT 1", $model_key );
+		$this->is_ready();
+		$display_column = in_array( 'display_model', $this->model_columns, true ) ? ', display_model' : '';
+		$sql = $this->db->prepare( "SELECT id, model_key, brand, commercial_type{$display_column} FROM {$this->tables->models} WHERE model_key = %s LIMIT 1", $model_key );
 		$row = $this->db->get_row( $sql, ARRAY_A );
 		return $row ?: null;
 	}

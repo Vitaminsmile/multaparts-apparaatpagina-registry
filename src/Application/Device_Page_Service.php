@@ -18,7 +18,7 @@ final class Device_Page_Service {
 		$hydrated = $this->products->hydrate( array_column( $links, 'product_id' ) );
 		$known_rows = $this->registry->known_variants( (int) $model['id'] );
 		$known = array_column( $known_rows, 'id' ); $vm = new Device_Page_View_Model();
-		$vm->model = $model; $vm->canonical = $this->resolver->canonical_url( $model );
+		$vm->set_model( $model ); $vm->canonical = $this->resolver->canonical_url( $model );
 		$vm->preview = (bool) array_filter( $links, static function ( $link ) { return 'private' === $link['post_status']; } );
 		$family_values = array();
 		foreach ( $links as $link ) {

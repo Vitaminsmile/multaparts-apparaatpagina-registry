@@ -10,7 +10,9 @@ function wp_unslash($value){return $value;}
 function wp_parse_url($url,$component=-1){return parse_url($url,$component);}
 function add_query_arg($args,$url){return $url.(strpos($url,'?')===false?'?':'&').http_build_query($args);}
 function esc_attr($value){return htmlspecialchars($value,ENT_QUOTES);}
+function esc_html($value){return htmlspecialchars($value,ENT_QUOTES);}
 function esc_url($value){return $value;}
+function home_url($path=''){return 'https://example.test'.$path;}
 function has_action($hook){return !empty($GLOBALS['test_actions'][$hook]);}
 function get_option($name,$default=false){return array_key_exists($name,$GLOBALS['test_options']??[])?$GLOBALS['test_options'][$name]:$default;}
 function get_query_var($name){return $GLOBALS['test_query_vars'][$name]??'';}
@@ -22,11 +24,13 @@ require $root.'/src/Routing/Rewrite_Manager.php';
 require $root.'/src/Routing/Route_Slug_Normalizer.php';
 require $root.'/src/Routing/Device_Query.php';
 require $root.'/src/Routing/Model_Route_Resolver.php';
+require $root.'/src/Routing/Canonical_Key_Route_Resolver.php';
 require $root.'/src/Infrastructure/Registry/Registry_Reader.php';
 require $root.'/src/Infrastructure/Registry/Registry_Table_Names.php';
 require $root.'/src/Infrastructure/Registry/Wpdb_Registry_Reader.php';
 require $root.'/src/Integration/Seo_Hooks.php';
 require $root.'/src/Application/Device_Page_Controller.php';
+require $root.'/src/View/Device_Page_View_Model.php';
 require $root.'/src/Integration/Public_Device_Page_Url.php';
 require $root.'/src/Integration/Public_Device_Product_Ids.php';
 require $root.'/src/Integration/functions.php';
@@ -43,6 +47,8 @@ use Multaparts\ApparaatpaginaRegistry\Integration\Public_Device_Page_Url;
 use Multaparts\ApparaatpaginaRegistry\Integration\Public_Device_Product_Ids;
 use Multaparts\ApparaatpaginaRegistry\Routing\Device_Query;
 use Multaparts\ApparaatpaginaRegistry\Routing\Model_Route_Resolver;
+use Multaparts\ApparaatpaginaRegistry\Routing\Canonical_Key_Route_Resolver;
+use Multaparts\ApparaatpaginaRegistry\View\Device_Page_View_Model;
 
 $scope=new Scope();
 check(function_exists('mapr_get_device_page_url'),'public device URL function exists after integration functions load');
@@ -213,7 +219,7 @@ $schema=array(
 	'wp_psa_device_variants'=>['id','device_model_id','machinecode'],
 	'wp_psa_product_device_links'=>['product_id','device_model_id','device_variant_id'],
 );
-$db=new class($schema){public $schema;public function __construct($schema){$this->schema=$schema;}public function esc_like($v){return addcslashes($v,'_%\\');}public function prepare($sql,$value){return [$sql,$value];}public function get_var($query){$table=stripcslashes($query[1]);return isset($this->schema[$table])?$table:null;}public function get_results($sql,$format){preg_match('/`([^`]+)`/',$sql,$m);return array_map(static function($field){return ['Field'=>$field];},$this->schema[$m[1]]??[]);}};
+$db=new class($schema){public $schema;public $last_row_query;public function __construct($schema){$this->schema=$schema;}public function esc_like($v){return addcslashes($v,'_%\\');}public function prepare($sql,$value){return [$sql,$value];}public function get_var($query){$table=stripcslashes($query[1]);return isset($this->schema[$table])?$table:null;}public function get_results($sql,$format){preg_match('/`([^`]+)`/',$sql,$m);return array_map(static function($field){return ['Field'=>$field];},$this->schema[$m[1]]??[]);}public function get_row($query,$format){$this->last_row_query=$query;return ['id'=>8,'model_key'=>'zanker|at2010','brand'=>'Zanker','commercial_type'=>'AT2010','display_model'=>'AT2010 (P)'];}};
 $GLOBALS['test_options']=['psa_compatibility_registry_schema_version'=>'1.0.0'];
 check((new Wpdb_Registry_Reader($db,new Registry_Table_Names('wp_')))->is_ready(),'compatible registry schema is accepted');
 $missing_table=$schema;unset($missing_table['wp_psa_device_variants']);
@@ -224,32 +230,51 @@ $GLOBALS['test_options']=['psa_compatibility_registry_schema_version'=>'2.0.0'];
 check(!(new Wpdb_Registry_Reader($db,new Registry_Table_Names('wp_')))->is_ready(),'incompatible registry version is rejected');
 check(!preg_match('/\b(?:dbDelta|ALTER|CREATE|INSERT|UPDATE|DELETE)\b/i',$reader),'readiness performs no schema writes');
 
-$view=(object)['model'=>['brand'=>'Zanker','commercial_type'=>'AT5000'],'canonical'=>'https://example.test/onderdelen/zanker/at5000/','preview'=>false];
+$display_schema=$schema;$display_schema['wp_psa_device_models'][]='display_model';
+$display_db=new ($db::class)($display_schema);$GLOBALS['test_options']=['psa_compatibility_registry_schema_version'=>'1.0.0'];
+$display_reader=new Wpdb_Registry_Reader($display_db,new Registry_Table_Names('wp_'));
+check($display_reader->find_model('zanker|at2010')['display_model']==='AT2010 (P)'&&strpos($display_db->last_row_query[0],', display_model')!==false,'registry display_model is read when the existing optional column is available');
+$legacy_db=new ($db::class)($schema);(new Wpdb_Registry_Reader($legacy_db,new Registry_Table_Names('wp_')))->find_model('zanker|at2010');
+check(strpos($legacy_db->last_row_query[0],', display_model')===false,'registry model lookup remains compatible when display_model is absent');
+
+$view=new Device_Page_View_Model();
+$view->set_model(['id'=>8,'model_key'=>'zanker|at2010','brand'=>'Zanker','commercial_type'=>'AT2010','display_model'=>'AT2010 (P)']);
+$view->canonical='https://example.test/onderdelen/zanker/at2010/';
+check($view->display_type==='AT2010 (P)','view model exposes the registry display name when present');
+ob_start();include $root.'/templates/parts/hero.php';$display_hero=ob_get_clean();
+ob_start();include $root.'/templates/parts/breadcrumb.php';$display_breadcrumb=ob_get_clean();
+check(strpos($display_hero,'Onderdelen voor Zanker AT2010 (P)')!==false&&strpos($display_breadcrumb,'AT2010 (P)')!==false,'hero and breadcrumb render the public display name');
+$fallback_view=new Device_Page_View_Model();$fallback_view->set_model(['brand'=>'Zanker','commercial_type'=>'AT2010']);
+check($fallback_view->display_type==='AT2010','missing registry display name falls back exactly to commercial_type');
+$canonical_resolver=new Canonical_Key_Route_Resolver($display_reader);
+check($canonical_resolver->canonical_url($view->model)==='https://example.test/onderdelen/zanker/at2010/','display name does not change the canonical URL');
+check($canonical_resolver->resolve('zanker','at2010')['model_key']==='zanker|at2010','existing route resolution still uses the canonical model key');
+
 $controller=new class($view){private $view;function __construct($view){$this->view=$view;}function view(){return $this->view;}};
 $seo_hooks=new Seo_Hooks($controller);
 $GLOBALS['test_actions']=[];ob_start();$seo_hooks->head();$plain_head=ob_get_clean();
 check(substr_count($plain_head,'name="description"')===1&&substr_count($plain_head,'rel="canonical"')===1,'non-Yoast head emits one description and canonical');
 $GLOBALS['test_actions']=['wpseo_head'=>true];ob_start();$seo_hooks->head();$yoast_head=ob_get_clean();
 check($yoast_head===''&&$seo_hooks->metadesc('')!=='','Yoast path suppresses plugin tags and supplies metadesc');
-check($seo_hooks->title('original')==='Onderdelen voor Zanker AT5000 | Multaparts'&&$seo_hooks->canonical('old')===$view->canonical,'Yoast title and canonical are device scoped');
+check($seo_hooks->title('original')==='Onderdelen voor Zanker AT2010 (P) | Multaparts'&&$seo_hooks->canonical('old')===$view->canonical,'Yoast title uses the display name while its canonical remains unchanged');
 $other_seo=new Seo_Hooks(new class{function view(){return null;}});
 check($other_seo->title('original')==='original'&&$other_seo->metadesc('original')==='original'&&$other_seo->canonical('old')==='old','Yoast filters leave unrelated routes untouched');
 $breadcrumb=source('templates/parts/breadcrumb.php');
-check(strpos($breadcrumb,'yoast_breadcrumb')===false&&preg_match('/Home.*Onderdelen.*brand.*commercial_type/s',$breadcrumb),'device breadcrumb remains plugin-owned and complete');
+check(strpos($breadcrumb,'yoast_breadcrumb')===false&&preg_match('/Home.*Onderdelen.*brand.*display_type/s',$breadcrumb),'device breadcrumb remains plugin-owned and uses the view display value');
 
 $preview_policy=new class{public $authorized=false;function authorized(){return $this->authorized;}};
 $route_controller=new Device_Page_Controller(null,null,$preview_policy,null);
-$_SERVER['REQUEST_URI']='/onderdelen/zanker/at5000/';$_GET=[];
+$_SERVER['REQUEST_URI']='/onderdelen/zanker/at2010/';$_GET=[];
 check($route_controller->canonical_redirect_url($view)===null,'canonical request does not redirect');
-$_SERVER['REQUEST_URI']='/onderdelen/ZANKER/AT5000';
+$_SERVER['REQUEST_URI']='/onderdelen/ZANKER/AT2010';
 check($route_controller->canonical_redirect_url($view)===$view->canonical,'uppercase and missing slash redirect to canonical');
-$_SERVER['REQUEST_URI']='/onderdelen/zanker/at5000';
+$_SERVER['REQUEST_URI']='/onderdelen/zanker/at2010';
 check($route_controller->canonical_redirect_url($view)===$view->canonical,'slash normalization redirects once');
-$_SERVER['REQUEST_URI']='/onderdelen/zanker/at5000/';
+$_SERVER['REQUEST_URI']='/onderdelen/zanker/at2010/';
 check($route_controller->canonical_redirect_url($view)===null,'redirect destination cannot loop');
-$_SERVER['REQUEST_URI']='/onderdelen/ZANKER/AT5000';$_GET=['mapr_preview'=>'1'];$preview_policy->authorized=true;
+$_SERVER['REQUEST_URI']='/onderdelen/ZANKER/AT2010';$_GET=['mapr_preview'=>'1'];$preview_policy->authorized=true;
 check($route_controller->canonical_redirect_url($view)===$view->canonical.'?mapr_preview=1','authorized preview intent survives canonical redirect');
-$_SERVER['REQUEST_URI']='/onderdelen/ZANKER/AT5000';$_GET=['untrusted'=>'value'];$preview_policy->authorized=false;
+$_SERVER['REQUEST_URI']='/onderdelen/ZANKER/AT2010';$_GET=['untrusted'=>'value'];$preview_policy->authorized=false;
 check($route_controller->canonical_redirect_url($view)===$view->canonical,'canonical redirect drops arbitrary query parameters');
 check(strpos(source('src/Application/Device_Page_Controller.php'),"if(404==")<strpos(source('src/Application/Device_Page_Controller.php'),'canonical_redirect_url'),'missing model is handled before redirect');
 check(strpos(source('src/Application/Device_Page_Controller.php'),'wp_safe_redirect($redirect,301)')!==false,'canonical redirect uses a safe permanent redirect');
