@@ -13,16 +13,22 @@ function esc_attr($value){return htmlspecialchars($value,ENT_QUOTES);}
 function esc_url($value){return $value;}
 function has_action($hook){return !empty($GLOBALS['test_actions'][$hook]);}
 function get_option($name,$default=false){return array_key_exists($name,$GLOBALS['test_options']??[])?$GLOBALS['test_options'][$name]:$default;}
+function get_query_var($name){return $GLOBALS['test_query_vars'][$name]??'';}
 if(!defined('ARRAY_A'))define('ARRAY_A','ARRAY_A');
 
 require $root.'/src/Application/Variant_Scope_Service.php';
 require $root.'/src/Application/Product_Family_Service.php';
 require $root.'/src/Routing/Rewrite_Manager.php';
+require $root.'/src/Routing/Route_Slug_Normalizer.php';
+require $root.'/src/Routing/Device_Query.php';
+require $root.'/src/Routing/Model_Route_Resolver.php';
 require $root.'/src/Infrastructure/Registry/Registry_Reader.php';
 require $root.'/src/Infrastructure/Registry/Registry_Table_Names.php';
 require $root.'/src/Infrastructure/Registry/Wpdb_Registry_Reader.php';
 require $root.'/src/Integration/Seo_Hooks.php';
 require $root.'/src/Application/Device_Page_Controller.php';
+require $root.'/src/Integration/Public_Device_Page_Url.php';
+require $root.'/src/Integration/functions.php';
 
 use Multaparts\ApparaatpaginaRegistry\Application\Variant_Scope_Service as Scope;
 use Multaparts\ApparaatpaginaRegistry\Application\Product_Family_Service as Family;
@@ -31,8 +37,13 @@ use Multaparts\ApparaatpaginaRegistry\Infrastructure\Registry\Registry_Table_Nam
 use Multaparts\ApparaatpaginaRegistry\Infrastructure\Registry\Wpdb_Registry_Reader;
 use Multaparts\ApparaatpaginaRegistry\Integration\Seo_Hooks;
 use Multaparts\ApparaatpaginaRegistry\Application\Device_Page_Controller;
+use Multaparts\ApparaatpaginaRegistry\Infrastructure\Registry\Registry_Reader;
+use Multaparts\ApparaatpaginaRegistry\Integration\Public_Device_Page_Url;
+use Multaparts\ApparaatpaginaRegistry\Routing\Device_Query;
+use Multaparts\ApparaatpaginaRegistry\Routing\Model_Route_Resolver;
 
 $scope=new Scope();
+check(function_exists('mapr_get_device_page_url'),'public device URL function exists after integration functions load');
 check(Rewrite_Manager::RULE==='^onderdelen/([^/]+)/([^/]+)/?$','route is narrowly anchored');
 check(!preg_match('#'.Rewrite_Manager::RULE.'#','winkel/zanker/at5000/'),'other URLs are not recognized');
 check($scope->classify(true,[1],[1])===Scope::MODEL_WIDE,'model-only wins over variant links');
@@ -40,6 +51,43 @@ check($scope->classify(false,[2,1],[1,2])===Scope::ALL_KNOWN_VARIANTS,'all known
 check($scope->classify(false,[1],[1,2])===Scope::SUBSET_OF_VARIANTS,'subset classification');
 check($scope->warning_required(Scope::SUBSET_OF_VARIANTS),'subset requires warning');
 check($scope->warning_required(Scope::INCONSISTENT),'inconsistent data fails conservatively');
+
+$url_reader=new class implements Registry_Reader{
+	public $ready=true;
+	public function is_ready(){return $this->ready;}
+	public function find_model($model_key){return null;}
+	public function known_variants($model_id){return [];}
+	public function product_links($model_id,array $statuses){return [];}
+};
+$url_resolver=new class implements Model_Route_Resolver{
+	public $resolved=[];public $canonical_models=[];public $model=['id'=>7,'model_key'=>'zanker|at5000'];
+	public function resolve($brand_slug,$type_slug){$this->resolved[]=[$brand_slug,$type_slug];return $this->model;}
+	public function canonical_url(array $model){$this->canonical_models[]=$model;return 'https://example.test/onderdelen/'.$model['model_key'].'/';}
+};
+$url_helper=new Public_Device_Page_Url($url_reader,$url_resolver);
+check($url_helper->get('Zanker','AT5000')==='https://example.test/onderdelen/zanker|at5000/','mixed-case helper input returns the resolver canonical URL');
+check($url_resolver->resolved[0]===['zanker','at5000'],'helper passes normalized route slugs to resolver');
+check($url_resolver->canonical_models[0]===$url_resolver->model,'helper obtains canonical URL from the resolved model through resolver');
+$url_resolver->model=null;
+check($url_helper->get('Unknown','Model')===null,'unknown model returns null');
+$url_resolver->model=['id'=>7];
+check($url_helper->get('Zanker','AT5000')===null,'invalid resolver model returns null');
+$url_resolver->model=['id'=>7,'model_key'=>'zanker|at5000'];$url_reader->ready=false;$resolve_count=count($url_resolver->resolved);
+check($url_helper->get('Zanker','AT5000')===null&&count($url_resolver->resolved)===$resolve_count,'unready registry returns null without model lookup');
+$url_reader->ready=true;
+check($url_helper->get('','AT5000')===null,'empty brand returns null');
+check($url_helper->get('Zanker','')===null,'empty commercial type returns null');
+check($url_helper->get([], 'AT5000')===null,'non-stringable brand input returns null');
+check($url_helper->get(str_repeat('a',81),'AT5000')===null,'brand over Device_Query limit is rejected');
+check($url_helper->get('Zanker',str_repeat('a',121))===null,'type over Device_Query limit is rejected');
+$GLOBALS['test_query_vars']=['mapr_brand'=>str_repeat('a',80),'mapr_type'=>str_repeat('b',120)];
+check((new Device_Query())->segments()===[str_repeat('a',80),str_repeat('b',120)],'existing route accepts shared maximum slug lengths');
+$GLOBALS['test_query_vars']=['mapr_brand'=>str_repeat('a',81),'mapr_type'=>'at5000'];
+check((new Device_Query())->segments()===null,'existing route uses the shared overlong-slug rejection');
+$public_sources=source('src/Integration/Public_Device_Page_Url.php').source('src/Integration/functions.php');
+check(strpos($public_sources,'display_model')===false&&strpos($public_sources,'type_number')===false&&strpos($public_sources,'machinecode')===false&&strpos($public_sources,'post_title')===false,'public helper introduces no fuzzy alias, title, or machinecode matching');
+check(!preg_match('/\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|dbDelta|flush_rewrite_rules|update_option|add_option)\b/i',$public_sources),'public helper contains no registry or WordPress write operations');
+check(strpos(source('src/Plugin.php'),'new Public_Device_Page_Url( $reader, $resolver )')!==false,'plugin bootstrap gives public helper the canonical route resolver');
 
 $attribute=new class{function is_taxonomy(){return false;}function get_name(){return 'Soort onderdeel';}function get_options(){return ['V-snaar'];}};
 $product=new class($attribute){private $a;function __construct($a){$this->a=$a;}function get_attributes(){return [$this->a];}function get_attribute($name){return '';}};
